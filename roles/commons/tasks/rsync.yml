@@ -1,0 +1,33 @@
+---
+#- stat: path={{tmp_src}}/
+#  register: is_dir
+
+- shell: mkdir {{tmp_src}}
+  ignore_errors: True
+#  when: is_dir|failed
+
+- shell: chown -R {{user}}  {{tmp_src}}
+- copy: src=src/ dest=/{{tmp_src}}/
+
+- stat: path={{prefix}}/
+  register: is_prefix
+
+- shell: rm -rf  {{prefix}}
+  when: is_prefix|success
+
+- shell: mkdir {{prefix}}
+  ignore_errors: True
+- shell: chown -R {{user}}  {{prefix}}
+
+- shell: tar zxvf {{tmp_src}}/apache-maven-{{maven_ver}}.tar.gz -C {{prefix}}/
+- shell: tar zxvf {{tmp_src}}/hadoop-{{hadoop_ver}}.tar.gz -C {{prefix}}/
+- shell: tar zxvf {{tmp_src}}/hbase-{{hbase_ver}}-bin.tar.gz -C {{prefix}}/
+- shell: tar zxvf {{tmp_src}}/zookeeper-{{zk_ver}}.tar.gz -C {{prefix}}/
+
+- copy: src=hosts  dest=/etc/
+
+#- synchronize: src={{files_prefix}}/apache-maven-{{maven_ver}}  dest={{prefix}}/ delete=yes
+#- synchronize: src={{files_prefix}}/hadoop-{{hadoop_ver}}       dest={{prefix}}/ delete=yes
+#- synchronize: src={{files_prefix}}/hbase-{{hbase_ver}}         dest={{prefix}}/ delete=yes
+#- synchronize: src={{files_prefix}}/zookeeper-{{zk_ver}}        dest={{prefix}}/ delete=yes
+#- synchronize: src={{files_prefix}}/jdk-6u24-linux-amd64.rpm    dest={{prefix}}/ delete=yes

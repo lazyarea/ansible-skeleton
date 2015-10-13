@@ -1,0 +1,12 @@
+put file in here.
+
+blahblah.tar.gz
+./.ssh/id_rsa
+./.ssh/id_rsa.pub
+
+
+tips)
+use command task/awesome.yml
+ex)
+synchronize: src={{backup}}/ dest={{tmp_src}}/  delete=yes
+./roles/deploy_setup/tasks/rsync.yml:- shell: rsync -av --delete {{tmp_src}}/hadoop-{{hadoop_ver}}/etc/conf.kya  {{prefix}}/hadoop-{{hadoop_ver}}/etc/

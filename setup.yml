@@ -1,0 +1,12 @@
+---
+- hosts: nagios_server
+  remote_user: ksto
+  sudo: yes
+  sudo_user: root
+  roles:
+    - setup
+  tasks:
+    - name: setup authorized_keys
+      authorized_key: user=ksto
+                      key="{{ lookup('file', '/home/ksto/.ssh/id_rsa.pub') }}"
+

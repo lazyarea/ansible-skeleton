@@ -1,0 +1,4 @@
+---
+nagios_user: nagios
+nagios_web_user: nagiosadmin
+nagios_home: /usr/local/nagios

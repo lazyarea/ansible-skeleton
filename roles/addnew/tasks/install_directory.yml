@@ -1,0 +1,90 @@
+---
+#--------------
+# /var/log/
+#--------------
+- command: mkdir -p /var/log/hadoop-{{hadoop_ver}}/logs
+- command: mkdir -p /var/log/hbase-{{hbase_ver}}/logs
+- command: mkdir -p /var/log/zookeeper-{{zk_ver}}/logs
+- command: chown {{user}}:{{user}} /var/log/hadoop-{{hadoop_ver}}/logs
+- command: chown hbase:{{ugroup}} /var/log/hbase-{{hbase_ver}}/logs
+- command: chown zookeeper:{{ugroup}} /var/log/zookeeper-{{zk_ver}}/logs
+- command: chmod g+w /var/log/hadoop-{{hadoop_ver}}/logs
+- command: chmod g+w /var/log/hbase-{{hbase_ver}}/logs
+- command: chmod g+w /var/log/zookeeper-{{zk_ver}}/logs
+- command: ln -s /var/log/hadoop-{{hadoop_ver}}/logs         {{prefix}}/hadoop-{{hadoop_ver}}/
+- command: ln -s /var/log/hbase-{{hbase_ver}}/logs {{prefix}}/hbase-{{hbase_ver}}/
+- command: ln -s /var/log/zookeeper-{{zk_ver}}/logs      {{prefix}}/zookeeper-{{zk_ver}}/
+
+#--------------
+# /var/lib/
+#--------------
+- command: mkdir -p /var/lib/hadoop
+- command: chmod -R g+w /var/lib/hadoop
+- command: chown {{user}}:{{user}} /var/lib/hadoop
+
+- command: mkdir -p /var/lib/hbase-{{hbase_ver}}
+- command: chmod -R g+w /var/lib/hbase-{{hbase_ver}}
+- command: chown -R hbase:{{ugroup}} /var/lib/hbase-{{hbase_ver}}
+
+- command: mkdir -p /var/lib/zookeeper-{{zk_ver}}
+- command: chmod -R g+w /var/lib/zookeeper-{{zk_ver}}
+- command: chown -R zookeeper:{{ugroup}} /var/lib/zookeeper-{{zk_ver}}
+
+#--------------
+# 
+#--------------
+- command: chown -R root. {{prefix}}
+#- command: chown -R root. {{prefix}}/hadoop-{{hadoop_ver}}
+#- command: chown -R root. {{prefix}}/hbase-{{hbase_ver}}
+#- command: chown -R root. {{prefix}}/zookeeper-{{zk_ver}}
+#- command: chown -R root. {{prefix}}/apache-maven-3.2.2
+
+#--------------
+# /etc/default/
+#--------------
+- shell: echo 'export JAVA_HOME=/usr/java/latest' > /etc/default/java
+- shell: echo 'export PATH=$PATH:$JAVA_HOME/bin'  >> /etc/default/java
+- shell: echo 'JAVA_OPTS="-Djava.net.preferIPv4Stack=true"' >> /etc/default/java
+- lineinfile: dest=/etc/bashrc state=present regexp='java' insertafter=EOF line='source /etc/default/java'
+
+- shell: echo 'export HADOOP_PREFIX={{prefix}}/hadoop-{{hadoop_ver}}' > /etc/default/hadoop
+- shell: echo 'export HADOOP_HOME=$HADOOP_PREFIX'                    >> /etc/default/hadoop
+- shell: echo 'export PATH=$PATH:$HADOOP_PREFIX/bin'  >> /etc/default/hadoop
+- lineinfile: dest=/etc/bashrc state=present regexp='hadoop' insertafter=EOF line='source /etc/default/hadoop'
+
+- shell: echo 'export M3_HOME={{prefix}}/apache-maven-3.2.2' > /etc/default/maven3
+- shell: echo 'export M3=$M3_HOME/bin'                >> /etc/default/maven3
+- shell: echo 'export PATH=$M3:$PATH'                 >> /etc/default/maven3
+- lineinfile: dest=/etc/bashrc state=present regexp='maven3' insertafter=EOF line='source /etc/default/maven3'
+
+- shell: echo 'export ZOOKEEPER_PREFIX={{prefix}}/zookeeper-{{zk_ver}}' > /etc/default/zookeeper
+- shell: echo 'export PATH=$PATH:$ZOOKEEPER_PREFIX/bin'     >> /etc/default/zookeeper
+- lineinfile: dest=/etc/bashrc state=present regexp='zookeeper' insertafter=EOF line='source /etc/default/zookeeper'
+
+- shell: echo 'export HBASE_PREFIX={{prefix}}/hbase-{{hbase_ver}}' > /etc/default/hbase
+- shell: echo 'export HBASE_HOME=$HBASE_PREFIX'                   >> /etc/default/hbase
+- shell: echo 'export PATH=$PATH:$HBASE_PREFIX/bin'          >> /etc/default/hbase
+- lineinfile: dest=/etc/bashrc state=present regexp='hbase' insertafter=EOF line='source /etc/default/hbase'
+
+#--------------
+# create conf.dist
+#--------------
+- command: mv {{prefix}}/hadoop-{{hadoop_ver}}/etc/hadoop {{prefix}}/hadoop-{{hadoop_ver}}/etc/conf.dist
+- command: cp -pr {{prefix}}/hadoop-{{hadoop_ver}}/etc/conf.dist {{prefix}}/hadoop-{{hadoop_ver}}/etc/conf.kya
+- command: mv {{prefix}}/hbase-{{hbase_ver}}/conf {{prefix}}/hbase-{{hbase_ver}}/conf.dist
+- command: cp -pr {{prefix}}/hbase-{{hbase_ver}}/conf.dist {{prefix}}/hbase-{{hbase_ver}}/conf.kya
+- command: mv {{prefix}}/zookeeper-{{zk_ver}}/conf {{prefix}}/zookeeper-{{zk_ver}}/conf.dist
+- command: cp -pr {{prefix}}/zookeeper-{{zk_ver}}/conf.dist {{prefix}}/zookeeper-{{zk_ver}}/conf.kya
+
+#--------------
+# alternatives
+#--------------
+- command: /usr/sbin/alternatives --install {{prefix}}/hadoop-{{hadoop_ver}}/etc/hadoop hadoop-conf {{prefix}}/hadoop-{{hadoop_ver}}/etc/conf.dist 10
+- command: /usr/sbin/alternatives --install {{prefix}}/hadoop-{{hadoop_ver}}/etc/hadoop hadoop-conf {{prefix}}/hadoop-{{hadoop_ver}}/etc/conf.kya  11
+
+- command: /usr/sbin/alternatives --install {{prefix}}/hbase-{{hbase_ver}}/conf hbase-conf {{prefix}}/hbase-{{hbase_ver}}/conf.dist 10
+- command: /usr/sbin/alternatives --install {{prefix}}/hbase-{{hbase_ver}}/conf hbase-conf {{prefix}}/hbase-{{hbase_ver}}/conf.kya  11
+
+- command: /usr/sbin/alternatives --install {{prefix}}/zookeeper-{{zk_ver}}/conf zookeeper-conf {{prefix}}/zookeeper-{{zk_ver}}/conf.dist 10
+- command: /usr/sbin/alternatives --install {{prefix}}/zookeeper-{{zk_ver}}/conf zookeeper-conf {{prefix}}/zookeeper-{{zk_ver}}/conf.kya  11
+

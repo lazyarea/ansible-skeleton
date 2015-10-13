@@ -1,0 +1,17 @@
+---
+#ansible_ssh_pass: 'secret phrase'
+#ansible_sudo_pass: 'secret phrase'
+
+prefix: /opt/aaa
+files_prefix: opt/aaa
+ansible_tmp: /tmp/ansible_tmp
+tmp_src: /tmp/src
+maven_ver: 3.2.2
+hbase_ver: 0.98.7-hadoop2
+hadoop_ver: 2.5.0
+zk_ver: 3.4.6
+
+user: ksto
+#ugroup: hellohello
+
+backup: backup

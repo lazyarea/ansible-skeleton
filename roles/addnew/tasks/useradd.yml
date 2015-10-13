@@ -1,0 +1,8 @@
+---
+#- shell: useradd {{user}}
+#  ignore_errors: True
+- shell: /usr/sbin/useradd -G {{ugroup}} hbase
+  ignore_errors: True
+- shell: /usr/sbin/useradd -G {{ugroup}} zookeeper
+  ignore_errors: True
+

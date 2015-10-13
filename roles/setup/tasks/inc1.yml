@@ -1,0 +1,33 @@
+- name: install packages for nagios
+  yum: name={{ item }} state=present
+  with_items:
+  - wget
+  - httpd
+  - php
+  - gcc
+  - glibc
+  - glibc-common
+  - gd
+  - gd-devel
+  - make
+  - net-snmp
+  - openssl
+  - openssl-devel
+  - nrpe
+
+#- debug: msg="adduser nagios"
+#- user: name={{nagios_user}} comment="{{nagios_user}}" home="{{nagios_home}}"
+
+- name: install nagios, plugin from the epel repo
+  yum: name={{ item }} state=present
+  with_items:
+  - nagios
+  - nagios-plugins-ping
+  - nagios-plugins-disk
+  - nagios-plugins-users
+  - nagios-plugins-procs
+  - nagios-plugins-load
+  - nagios-plugins-swap
+  - nagios-plugins-ssh
+  - nagios-plugins-http
+  - nagios-plugins-nrpe

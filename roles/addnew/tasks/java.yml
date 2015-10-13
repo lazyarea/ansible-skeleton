@@ -1,0 +1,4 @@
+---
+- shell: rpm -Uvh  {{tmp_src}}/jdk-6u24-linux-amd64.rpm
+  ignore_errors: True
+

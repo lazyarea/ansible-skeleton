@@ -1,0 +1,6 @@
+---
+- include: inc1.yml
+- include: inc2.yml
+
+- command: mkdir -p /var/log/hadoop-{{hadoop_ver}}/logs
+

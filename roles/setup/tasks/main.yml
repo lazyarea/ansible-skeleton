@@ -1,0 +1,3 @@
+---
+#- include: inc1.yml
+- include: inc2.yml

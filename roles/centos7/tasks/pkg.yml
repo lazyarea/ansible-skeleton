@@ -1,0 +1,37 @@
+#-----------------------------------
+# gcc
+#-----------------------------------
+- debug: msg="gcc is not. NG"
+- command: which gcc
+  register: gcc_result
+  ignore_errors: True
+
+- name: install gcc packages
+  yum: name={{ item }} state=present
+  with_items:
+  - gcc
+  when: gcc_result|failed
+
+#-----------------------------------
+# c++
+#-----------------------------------
+- debug: msg="c++ is not. NG"
+- command: which c++
+  register: cpp_result
+  ignore_errors: True
+
+- name: install c++ packages
+  yum: name={{ item }} state=present
+  with_items:
+  - gcc
+  when: cpp_result|failed
+
+#-----------------------------------
+# zlib zlib-devel perl-local-lib
+#-----------------------------------
+- name: install zlib perl-local-lib packages
+  yum: name={{ item }} state=present
+  with_items:
+  - zlib
+  - zlib-devel
+  - perl-local-lib

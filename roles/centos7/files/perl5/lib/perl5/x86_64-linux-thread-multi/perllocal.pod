@@ -1,0 +1,154 @@
+=head2 Thu Oct 15 13:54:24 2015: C<Module> L<Test::Stream|Test::Stream>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 1.302016>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Thu Oct 15 13:55:01 2015: C<Module> L<Test::Simple|Test::Simple>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 1.302012_002>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Thu Oct 15 13:56:03 2015: C<Module> L<KyotoCabinet|KyotoCabinet>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 1.20>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Thu Oct 15 13:58:42 2015: C<Module> L<Data::Dumper|Data::Dumper>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 2.154>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Thu Oct 15 14:01:47 2015: C<Module> L<version|version>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 0.9912>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Thu Oct 15 14:03:07 2015: C<Module> L<Hook::LexWrap|Hook::LexWrap>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 0.25>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Thu Oct 15 14:03:36 2015: C<Module> L<use|use>
+
+=over 4
+
+=item *
+
+C<installed into: /home/lazyarea/perl5/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 0.05>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+

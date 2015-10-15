@@ -1,0 +1,14 @@
+#- debug: msg={{ ansible_env.HOME }}
+- debug: msg="cp -r .local  ${HOME}/"
+- local_action: synchronize src=roles/centos7/files/.local dest={{user_home}}/
+
+- debug: msg="cp -r perl5 ${HOME}/"
+- local_action: synchronize src=roles/centos7/files/perl5 dest={{user_home}}/
+
+- command: ls ~/.bash_profile
+  register: bash_result
+  ignore_errors: True
+
+- debug: msg="add PATH to .bash_profile."
+- shell: cat roles/centos7/files/add_to_bash_profile >>  {{user_home}}/.bash_profile
+  when: bash_result|success

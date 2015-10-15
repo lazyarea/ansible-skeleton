@@ -1,0 +1,3 @@
+---
+#- include: pkg.yml
+- include: copy.yml

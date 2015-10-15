@@ -1,0 +1,899 @@
+=head1 NAME
+
+KyotoCabinet - a straightforward implementation of DBM
+
+=head1 SYNOPSYS
+
+ use KyotoCabinet;
+
+=head1 INTRODUCTION
+
+Kyoto Cabinet is a library of routines for managing a database.  The database is a simple data file containing records, each is a pair of a key and a value.  Every key and value is serial bytes with variable length.  Both binary data and character string can be used as a key and a value.  Each key must be unique within a database.  There is neither concept of data tables nor data types.  Records are organized in hash table or B+ tree.
+
+The following access methods are provided to the database: storing a record with a key and a value, deleting a record by a key, retrieving a record by a key.  Moreover, traversal access to every key are provided.  These access methods are similar to ones of the original DBM (and its followers: NDBM and GDBM) library defined in the UNIX standard.  Kyoto Cabinet is an alternative for the DBM because of its higher performance.
+
+Each operation of the hash database has the time complexity of "O(1)".  Therefore, in theory, the performance is constant regardless of the scale of the database.  In practice, the performance is determined by the speed of the main memory or the storage device.  If the size of the database is less than the capacity of the main memory, the performance will seem on-memory speed, which is faster than std::map of STL.  Of course, the database size can be greater than the capacity of the main memory and the upper limit is 8 exabytes.  Even in that case, each operation needs only one or two seeking of the storage device.
+
+Each operation of the B+ tree database has the time complexity of "O(log N)".  Therefore, in theory, the performance is logarithmic to the scale of the database.  Although the performance of random access of the B+ tree database is slower than that of the hash database, the B+ tree database supports sequential access in order of the keys, which realizes forward matching search for strings and range search for integers.  The performance of sequential access is much faster than that of random access.
+
+This library wraps the polymorphic database of the C++ API.  So, you can select the internal data structure by specifying the database name in runtime.  This library is NOT thread-safe for Perl ithread.
+
+=head1 INSTALLATION
+
+Install the latest version of Kyoto Cabinet beforehand and get the package of the Perl binding of Kyoto Cabinet.
+
+Enter the directory of the extracted package then perform installation.
+
+ perl Makefile.PL
+ make
+ su
+ make install
+
+The package `KyotoCabinet' should be loaded in each source file of application programs.
+
+ use KyotoCabinet;
+
+An instance of the class `DB' is used in order to handle a database.  You can store, delete, and retrieve records with the instance.
+
+=head1 EXAMPLE
+
+The following code is a typical example to use a database.
+
+ use KyotoCabinet;
+ 
+ # create the database object
+ my $db = new KyotoCabinet::DB;
+ 
+ # open the database
+ if (!$db->open('casket.kch', $db->OWRITER | $db->OCREATE)) {
+     printf STDERR ("open error: %s\n", $db->error);
+ }
+ 
+ # store records
+ if (!$db->set('foo', 'hop') ||
+     !$db->set('bar', 'step') ||
+     !$db->set('baz', 'jump')) {
+     printf STDERR ("set error: %s\n", $db->error);
+ }
+ 
+ # retrieve records
+ my $value = $db->get('foo');
+ if (defined($value)) {
+     printf("%s\n", $value);
+ } else {
+     printf STDERR ("get error: %s\n", $db->error);
+ }
+ 
+ # traverse records
+ my $cur = $db->cursor;
+ $cur->jump;
+ while (my ($key, $value) = $cur->get(1)) {
+     printf("%s:%s\n", $key, $value);
+ }
+ $cur->disable;
+ 
+ if (!$db->close) {
+     printf STDERR ("close error: %s\n", $db->error);
+ }
+
+The following code is a more complex example, which uses the Visitor pattern.
+
+ use KyotoCabinet;
+ 
+ # create the database object
+ my $db = new KyotoCabinet::DB;
+ 
+ # open the database
+ if (!$db->open('casket.kch', $db->OREADER)) {
+     printf STDERR ("open error: %s\n", $db->error);
+ }
+ 
+ # define the visitor
+ {
+     package VisitorImpl;
+     use base qw(KyotoCabinet::Visitor);
+     # constructor
+     sub new {
+         my $self = new KyotoCabinet::Visitor;
+         bless $self;
+         return $self;
+     }
+     # call back function for an existing record
+     sub visit_full {
+         my ($self, $key, $value) = @_;
+         printf("%s:%s\n", $key, $value);
+         return $self->NOP;
+     }
+     # call back function for an empty record space
+     sub visit_empty {
+         my ($self, $key) = @_;
+         printf STDERR ("%s is missing\n", $key);
+         return $self->NOP;
+     }
+ }
+ my $visitor = new VisitorImpl;
+ 
+ # retrieve a record with visitor
+ if (!$db->accept("foo", $visitor, 0) ||
+     !$db->accept("dummy", $visitor, 0)) {
+     printf STDERR ("accept error: %s\n", $db->error);
+ }
+ 
+ # traverse records with visitor
+ if (!$db->iterate($visitor, 0)) {
+     printf STDERR ("iterate error: %s\n", $db->error);
+ }
+ 
+ # close the database
+ if (!$db->close) {
+     printf STDERR ("close error: %s\n", $db->error);
+ }
+
+The following code is also a complex example, which is suited to the Perl style.
+
+ use KyotoCabinet;
+ 
+ # tie a hash variable to the database
+ my $db = tie(my %db, 'KyotoCabinet::DB', 'casket.kch');
+ 
+ # store records
+ $db{'foo'} = 'hop';   # string is fundamental
+ $db{bar} = 'step';    # omitting quotation is ok
+ $db{3} = 'jump';      # number is also ok
+ 
+ # retrieve a record value
+ printf("%s\n", $db{'foo'});
+ 
+ # update records in transaction
+ $db->transaction(sub {
+     $db{'foo'} = 2.71828;
+     1;
+ });
+ 
+ # multiply a record value
+ $db->accept('foo', sub {
+     my ($key, $value) = @_;
+     $value * 2;
+ });
+ 
+ # traverse records by iterator
+ while (my ($key, $value) = each(%db)) {
+     printf("%s:%s\n", $key, $value);
+ }
+ 
+ # upcase values by iterator
+ $db->iterate(sub {
+     my ($key, $value) = @_;
+     uc($value);
+ });
+ 
+ # traverse records by cursor
+ $db->cursor_process(sub {
+     my ($cur) = @_;
+     $cur->jump;
+     while ($cur->accept(sub {
+             my ($key, $value) = @_;
+             printf("%s:%s\n", $key, $value);
+             KyotoCabinet::Visitor::NOP;
+         })) {
+         $cur->step;
+     }
+ });
+ 
+ # untie the hash variable
+ undef($db);
+ untie(%db);
+
+=head1 DESCRIPTION
+
+=head2 Class KyotoCabinet
+
+Namespace of Kyoto Cabinet.
+
+=over
+
+=item KyotoCabinet::VERSION()
+
+E<10>The version information.
+
+=item KyotoCabinet::atoi(I<str>)
+
+E<10>Convert a string to an integer.
+E<10>@param str specifies the string.
+E<10>@return the integer.  If the string does not contain numeric expression, 0 is returned.
+
+=item KyotoCabinet::atoix(I<str>)
+
+E<10>Convert a string with a metric prefix to an integer.
+E<10>@param str the string, which can be trailed by a binary metric prefix.  "K", "M", "G", "T", "P", and "E" are supported.  They are case-insensitive.
+E<10>@return the integer.  If the string does not contain numeric expression, 0 is returned.  If the integer overflows the domain, INT64_MAX or INT64_MIN is returned according to the sign.
+
+=item KyotoCabinet::atof(I<str>)
+
+E<10>Convert a string to a real number.
+E<10>@param str specifies the string.
+E<10>@return the real number.  If the string does not contain numeric expression, 0.0 is returned.
+
+=item KyotoCabinet::hash_murmur(I<str>)
+
+E<10>Get the hash value of a string by MurMur hashing.
+E<10>@param str the string.
+E<10>@return the hash value.
+
+=item KyotoCabinet::hash_fnv(I<str>)
+
+E<10>Get the hash value of a string by FNV hashing.
+E<10>@param str the string.
+E<10>@return the hash value.
+
+=item KyotoCabinet::levdist(I<a>, I<b>, I<utf>)
+
+E<10>Calculate the levenshtein distance of two strings.
+E<10>@param a one string.
+E<10>@param b the other string.
+E<10>@param utf flag to treat keys as UTF-8 strings.  If it is omitted, false is specified.
+E<10>@return the levenshtein distance.
+
+=back
+
+=head2 Class KyotoCabinet::Error
+
+This class expresses error data.
+
+=over
+
+=item KyotoCabinet::Error::SUCCESSZ<>()
+
+E<10>error code: success
+
+=item KyotoCabinet::Error::NOIMPLZ<>()
+
+E<10>error code: not implemented
+
+=item KyotoCabinet::Error::INVALIDZ<>()
+
+E<10>error code: invalid operation
+
+=item KyotoCabinet::Error::NOREPOSZ<>()
+
+E<10>error code: no repository
+
+=item KyotoCabinet::Error::NOPERMZ<>()
+
+E<10>error code: no permission
+
+=item KyotoCabinet::Error::BROKENZ<>()
+
+E<10>error code: broken file
+
+=item KyotoCabinet::Error::DUPRECZ<>()
+
+E<10>error code: record duplication
+
+=item KyotoCabinet::Error::NORECZ<>()
+
+E<10>error code: no record
+
+=item KyotoCabinet::Error::LOGICZ<>()
+
+E<10>error code: logical inconsistency
+
+=item KyotoCabinet::Error::SYSTEMZ<>()
+
+E<10>error code: system error
+
+=item KyotoCabinet::Error::MISCZ<>()
+
+E<10>error code: miscellaneous error
+
+=item $err = new KyotoCabinet::ErrorZ<>(I<code>, I<message>)
+
+E<10>Create an error object.
+E<10>@param code the error code.
+E<10>@param message the supplement message.
+E<10>@return the error object.
+
+=item $err-E<gt>setZ<>(I<code>, I<message>)
+
+E<10>Set the error information.
+E<10>@param code the error code.
+E<10>@param message the supplement message.
+E<10>@return always undef.
+
+=item $err-E<gt>codeZ<>()
+
+E<10>Get the error code.
+E<10>@return the error code.
+
+=item $err-E<gt>nameZ<>()
+
+E<10>Get the readable string of the code.
+E<10>@return the readable string of the code.
+
+=item $err-E<gt>messageZ<>()
+
+E<10>Get the supplement message.
+E<10>@return the supplement message.
+
+=item $err-E<gt>stringZ<>()
+
+E<10>Get the string expression.
+E<10>@return the string expression.
+E<10>@note This method overrides the stringification operator.
+
+=item $err-E<gt>compareZ<>(I<right>)
+
+E<10>Compare itself with another error data.
+E<10>@param right an error object or an error code.
+E<10>@return true for the both operands are equal, or false if not.
+E<10>@note This method overrides the comparison operator.
+
+=back
+
+=head2 Class KyotoCabinet::Visitor
+
+This class expresses the interface to access a record.
+
+=over
+
+=item KyotoCabinet::Visitor::NOPZ<>()
+
+E<10>magic data: no operation
+
+=item KyotoCabinet::Visitor::REMOVEZ<>()
+
+E<10>magic data: remove the record
+
+=item $vis = new KyotoCabinet::VisitorZ<>()
+
+E<10>Create a visitor object.
+E<10>@return the visitor object.
+
+=item $vis-E<gt>visit_fullZ<>(I<key>, I<value>)
+
+E<10>Visit a record.
+E<10>@param key the key.
+E<10>@param value the value.
+E<10>@return If it is a string, the value is replaced by the content.  If it is KyotoCabinet::Visitor::NOP, nothing is modified.  If it is KyotoCabinet::Visitor::REMOVE, the record is removed.
+
+=item $vis-E<gt>visit_emptyZ<>(I<key>)
+
+E<10>Visit a empty record space.
+E<10>@param key the key.
+E<10>@return If it is a string, the value is replaced by the content.  If it is KyotoCabinet::Visitor::NOP or KyotoCabinet::Visitor::REMOVE, nothing is modified.
+
+=back
+
+=head2 Class KyotoCabinet::FileProcessor
+
+This class expresses the interface to process the database file.
+
+=over
+
+=item $fproc = new KyotoCabinet::FileProcessorZ<>()
+
+E<10>Create a file processor object.
+E<10>@return the file processor object.
+
+=item $fproc-E<gt>processZ<>(I<path>, I<count>, I<size>)
+
+E<10>Process the database file.
+E<10>@param path the path of the database file.
+E<10>@param count the number of records.
+E<10>@param size the size of the available region.
+E<10>@return true on success, or false on failure.
+
+=back
+
+=head2 Class KyotoCabinet::Cursor
+
+This class expresses the interface of cursor to indicate a record.
+
+=over
+
+=item $cur = new KyotoCabinet::CursorZ<>()
+
+E<10>Create a cursor object.
+E<10>@return the cursor object.
+
+=item $cur-E<gt>disableZ<>()
+
+E<10>Disable the cursor.
+E<10>@return always undef.
+E<10>@note This method should be called explicitly when the cursor is no longer in use.
+
+=item $cur-E<gt>acceptZ<>(I<visitor>, I<writable>, I<step>)
+
+E<10>Accept a visitor to the current record.
+E<10>@param visitor a visitor object which implements the Visitor interface.  It can be the reference to a function.
+E<10>@param writable true for writable operation, or false for read-only operation.
+E<10>@param step true to move the cursor to the next record, or false for no move.
+E<10>@return true on success, or false on failure.
+E<10>@note To avoid deadlock, any explicit database operation must not be performed in this method.
+
+=item $cur-E<gt>set_valueZ<>(I<value>, I<step>)
+
+E<10>Set the value of the current record.
+E<10>@param value the value.
+E<10>@param step true to move the cursor to the next record, or false for no move.
+E<10>@return true on success, or false on failure.
+
+=item $cur-E<gt>removeZ<>()
+
+E<10>Remove the current record.
+E<10>@return true on success, or false on failure.
+E<10>@note If no record corresponds to the key, false is returned.  The cursor is moved to the next record implicitly.
+
+=item $cur-E<gt>get_keyZ<>(I<step>)
+
+E<10>Get the key of the current record.
+E<10>@param step true to move the cursor to the next record, or false for no move.
+E<10>@return the key of the current record, or undef on failure.
+E<10>@note If the cursor is invalidated, undef is returned.
+
+=item $cur-E<gt>get_valueZ<>(I<step>)
+
+E<10>Get the value of the current record.
+E<10>@param step true to move the cursor to the next record, or false for no move.
+E<10>@return the value of the current record, or undef on failure.
+E<10>@note If the cursor is invalidated, undef is returned.
+
+=item $cur-E<gt>getZ<>(I<step>)
+
+E<10>Get a pair of the key and the value of the current record.
+E<10>@param step true to move the cursor to the next record, or false for no move.
+E<10>@return a pair of the key and the value of the current record, or undef on failure.
+E<10>@note If the cursor is invalidated, undef is returned.
+
+=item $cur-E<gt>seizeZ<>()
+
+E<10>Get a pair of the key and the value of the current record and remove it atomically.
+E<10>@return a pair of the key and the value of the current record, or undef on failure.
+E<10>@note If the cursor is invalidated, undef is returned.  The cursor is moved to the next record implicitly.
+
+=item $cur-E<gt>jumpZ<>(I<key>)
+
+E<10>Jump the cursor to a record for forward scan.
+E<10>@param key the key of the destination record.  If it is undef, the destination is the first record.
+E<10>@return true on success, or false on failure.
+
+=item $cur-E<gt>jump_backZ<>(I<key>)
+
+E<10>Jump the cursor to a record for backward scan.
+E<10>@param key the key of the destination record.  If it is undef, the destination is the last record.
+E<10>@return true on success, or false on failure.
+E<10>@note This method is dedicated to tree databases.  Some database types, especially hash databases, will provide a dummy implementation.
+
+=item $cur-E<gt>stepZ<>()
+
+E<10>Step the cursor to the next record.
+E<10>@return true on success, or false on failure.
+
+=item $cur-E<gt>step_backZ<>()
+
+E<10>Step the cursor to the previous record.
+E<10>@return true on success, or false on failure.
+E<10>@note This method is dedicated to tree databases.  Some database types, especially hash databases, will provide a dummy implementation.
+
+=item $cur-E<gt>dbZ<>()
+
+E<10>Get the database object.
+E<10>@return the database object.
+
+=item $cur-E<gt>errorZ<>()
+
+E<10>Get the last happened error.
+E<10>@return the last happened error.
+
+=item $cur-E<gt>stringZ<>()
+
+E<10>Get the string expression.
+E<10>@return the string expression.
+E<10>@note This method overrides the stringification operator.
+
+=back
+
+=head2 Class KyotoCabinet::DB
+
+This class expresses the interface of database abstraction.
+
+=over
+
+=item KyotoCabinet::DB::OREADERZ<>()
+
+E<10>open mode: open as a reader
+
+=item KyotoCabinet::DB::OWRITERZ<>()
+
+E<10>open mode: open as a writer
+
+=item KyotoCabinet::DB::OCREATEZ<>()
+
+E<10>open mode: writer creating
+
+=item KyotoCabinet::DB::OTRUNCATEZ<>()
+
+E<10>open mode: writer truncating
+
+=item KyotoCabinet::DB::OAUTOTRANZ<>()
+
+E<10>open mode: auto transaction
+
+=item KyotoCabinet::DB::OAUTOSYNCZ<>()
+
+E<10>open mode: auto synchronization
+
+=item KyotoCabinet::DB::ONOLOCKZ<>()
+
+E<10>open mode: open without locking
+
+=item KyotoCabinet::DB::OTRYLOCKZ<>()
+
+E<10>open mode: lock without blocking
+
+=item KyotoCabinet::DB::ONOREPAIRZ<>()
+
+E<10>open mode: open without auto repair
+
+=item KyotoCabinet::DB::MSETZ<>()
+
+E<10>merge mode: overwrite the existing value
+
+=item KyotoCabinet::DB::MADDZ<>()
+
+E<10>merge mode: keep the existing value
+
+=item KyotoCabinet::DB::MREPLACEZ<>()
+
+E<10>merge mode: modify the existing record only
+
+=item KyotoCabinet::DB::MAPPENDZ<>()
+
+E<10>merge mode: append the new value
+
+=item $db = new KyotoCabinet::DBZ<>()
+
+E<10>Create a database object.
+E<10>@return the database object.
+
+=item $db-E<gt>errorZ<>()
+
+E<10>Get the last happened error.
+E<10>@return the last happened error.
+
+=item $db-E<gt>openZ<>(I<path>, I<mode>)
+
+E<10>Open a database file.
+E<10>@param path the path of a database file.  If it is "-", the database will be a prototype hash database.  If it is "+", the database will be a prototype tree database.  If it is ":", the database will be a stash database.  If it is "*", the database will be a cache hash database.  If it is "%", the database will be a cache tree database.  If its suffix is ".kch", the database will be a file hash database.  If its suffix is ".kct", the database will be a file tree database.  If its suffix is ".kcd", the database will be a directory hash database.  If its suffix is ".kcf", the database will be a directory tree database.  If its suffix is ".kcx", the database will be a plain text database.  Otherwise, this function fails.  Tuning parameters can trail the name, separated by "#".  Each parameter is composed of the name and the value, separated by "=".  If the "type" parameter is specified, the database type is determined by the value in "-", "+", ":", "*", "%", "kch", "kct", "kcd", kcf", and "kcx".  All database types support the logging parameters of "log", "logkinds", and "logpx".  The prototype hash database and the prototype tree database do not support any other tuning parameter.  The stash database supports "bnum".  The cache hash database supports "opts", "bnum", "zcomp", "capcnt", "capsiz", and "zkey".  The cache tree database supports all parameters of the cache hash database except for capacity limitation, and supports "psiz", "rcomp", "pccap" in addition.  The file hash database supports "apow", "fpow", "opts", "bnum", "msiz", "dfunit", "zcomp", and "zkey".  The file tree database supports all parameters of the file hash database and "psiz", "rcomp", "pccap" in addition.  The directory hash database supports "opts", "zcomp", and "zkey".  The directory tree database supports all parameters of the directory hash database and "psiz", "rcomp", "pccap" in addition.  The plain text database does not support any other tuning parameter.
+E<10>@param mode the connection mode.  KyotoCabinet::DB::OWRITER as a writer, KyotoCabinet::DB::OREADER as a reader.  The following may be added to the writer mode by bitwise-or: KyotoCabinet::DB::OCREATE, which means it creates a new database if the file does not exist, KyotoCabinet::DB::OTRUNCATE, which means it creates a new database regardless if the file exists, KyotoCabinet::DB::OAUTOTRAN, which means each updating operation is performed in implicit transaction, KyotoCabinet::DB::OAUTOSYNC, which means each updating operation is followed by implicit synchronization with the file system.  The following may be added to both of the reader mode and the writer mode by bitwise-or: KyotoCabinet::DB::ONOLOCK, which means it opens the database file without file locking, KyotoCabinet::DB::OTRYLOCK, which means locking is performed without blocking, KyotoCabinet::DB::ONOREPAIR, which means the database file is not repaired implicitly even if file destruction is detected.
+E<10>@return true on success, or false on failure.
+E<10>@note The tuning parameter "log" is for the original "tune_logger" and the value specifies the path of the log file, or "-" for the standard output, or "+" for the standard error.  "logkinds" specifies kinds of logged messages and the value can be "debug", "info", "warn", or "error".  "logpx" specifies the prefix of each log message.  "opts" is for "tune_options" and the value can contain "s" for the small option, "l" for the linear option, and "c" for the compress option.  "bnum" corresponds to "tune_bucket".  "zcomp" is for "tune_compressor" and the value can be "zlib" for the ZLIB raw compressor, "def" for the ZLIB deflate compressor, "gz" for the ZLIB gzip compressor, "lzo" for the LZO compressor, "lzma" for the LZMA compressor, or "arc" for the Arcfour cipher.  "zkey" specifies the cipher key of the compressor.  "capcnt" is for "cap_count".  "capsiz" is for "cap_size".  "psiz" is for "tune_page".  "rcomp" is for "tune_comparator" and the value can be "lex" for the lexical comparator, "dec" for the decimal comparator, "lexdesc" for the lexical descending comparator, or "decdesc" for the decimal descending comparator.  "pccap" is for "tune_page_cache".  "apow" is for "tune_alignment".  "fpow" is for "tune_fbp".  "msiz" is for "tune_map".  "dfunit" is for "tune_defrag".  Every opened database must be closed by the PolyDB::close method when it is no longer in use.  It is not allowed for two or more database objects in the same process to keep their connections to the same database file at the same time.
+
+=item $db-E<gt>closeZ<>()
+
+E<10>Close the database file.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>acceptZ<>(I<key>, I<visitor>, I<writable>)
+
+E<10>Accept a visitor to a record.
+E<10>@param key the key.
+E<10>@param visitor a visitor object which implements the Visitor interface.  It can be the reference to a function.
+E<10>@param writable true for writable operation, or false for read-only operation.
+E<10>@return true on success, or false on failure.
+E<10>@note To avoid deadlock, any explicit database operation must not be performed in this method.
+
+=item $db-E<gt>accept_bulkZ<>(I<keys>, I<visitor>, I<writable>)
+
+E<10>Accept a visitor to a record.
+E<10>@param keys the reference to an array of the keys.
+E<10>@param visitor a visitor object which implements the Visitor interface.  It can be the reference to a function.
+E<10>@param writable true for writable operation, or false for read-only operation.
+E<10>@return true on success, or false on failure.
+E<10>@note To avoid deadlock, any explicit database operation must not be performed in this method.
+
+=item $db-E<gt>iterateZ<>(I<visitor>, I<writable>)
+
+E<10>Iterate to accept a visitor for each record.
+E<10>@param visitor a visitor object which implements the Visitor interface.  It can be the reference to a function.
+E<10>@param writable true for writable operation, or false for read-only operation.
+E<10>@return true on success, or false on failure.
+E<10>@note To avoid deadlock, any explicit database operation must not be performed in this method.
+
+=item $db-E<gt>setZ<>(I<key>, I<value>)
+
+E<10>Set the value of a record.
+E<10>@param key the key.
+E<10>@param value the value.
+E<10>@return true on success, or false on failure.
+E<10>@note If no record corresponds to the key, a new record is created.  If the corresponding record exists, the value is overwritten.
+
+=item $db-E<gt>addZ<>(I<key>, I<value>)
+
+E<10>Add a record.
+E<10>@param key the key.
+E<10>@param value the value.
+E<10>@return true on success, or false on failure.
+E<10>@note If no record corresponds to the key, a new record is created.  If the corresponding record exists, the record is not modified and false is returned.
+
+=item $db-E<gt>replaceZ<>(I<key>, I<value>)
+
+E<10>Replace the value of a record.
+E<10>@param key the key.
+E<10>@param value the value.
+E<10>@return true on success, or false on failure.
+E<10>@note If no record corresponds to the key, no new record is created and false is returned.  If the corresponding record exists, the value is modified.
+
+=item $db-E<gt>appendZ<>(I<key>, I<value>)
+
+E<10>Append the value of a record.
+E<10>@param key the key.
+E<10>@param value the value.
+E<10>@return true on success, or false on failure.
+E<10>@note If no record corresponds to the key, a new record is created.  If the corresponding record exists, the given value is appended at the end of the existing value.
+
+=item $db-E<gt>incrementZ<>(I<key>, I<num>, I<orig>)
+
+E<10>Add a number to the numeric integer value of a record.
+E<10>@param key the key.
+E<10>@param num the additional number.
+E<10>@param orig the origin number if no record corresponds to the key.  If it is negative infinity and no record corresponds, this method fails.  If it is positive infinity, the value is set as the additional number regardless of the current value.
+E<10>@return the result value, or undef on failure.
+E<10>@note The value is serialized as an 8-byte binary integer in big-endian order, not a decimal string.  If existing value is not 8-byte, this method fails.
+
+=item $db-E<gt>increment_doubleZ<>(I<key>, I<num>, I<orig>)
+
+E<10>Add a number to the numeric double value of a record.
+E<10>@param key the key.
+E<10>@param num the additional number.
+E<10>@param orig the origin number if no record corresponds to the key.  If it is negative infinity and no record corresponds, this method fails.  If it is positive infinity, the value is set as the additional number regardless of the current value.
+E<10>@return the result value, or undef on failure.
+E<10>@note The value is serialized as an 16-byte binary fixed-point number in big-endian order, not a decimal string.  If existing value is not 16-byte, this method fails.
+
+=item $db-E<gt>casZ<>(I<key>, I<oval>, I<nval>)
+
+E<10>Perform compare-and-swap.
+E<10>@param key the key.
+E<10>@param oval the old value.  undef means that no record corresponds.
+E<10>@param nval the new value.  undef means that the record is removed.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>removeZ<>(I<key>)
+
+E<10>Remove a record.
+E<10>@param key the key.
+E<10>@return true on success, or false on failure.
+E<10>@note If no record corresponds to the key, false is returned.
+
+=item $db-E<gt>getZ<>(I<key>)
+
+E<10>Retrieve the value of a record.
+E<10>@param key the key.
+E<10>@return the value of the corresponding record, or undef on failure.
+
+=item $db-E<gt>checkZ<>(I<key>)
+
+E<10>Check the existence of a record.
+E<10>@param key the key.
+E<10>@return the size of the value, or -1 on failure.
+
+=item $db-E<gt>seizeZ<>(I<key>)
+
+E<10>Retrieve the value of a record and remove it atomically.
+E<10>@param key the key.
+E<10>@return the value of the corresponding record, or undef on failure.
+
+=item $db-E<gt>set_bulk(I<recs>)
+
+E<10>Store records at once.
+E<10>@param recs the reference to a hash of the records to store.
+E<10>@return the number of stored records, or -1 on failure.
+
+=item $db-E<gt>remove_bulk(I<keys>)
+
+E<10>Remove records at once.
+E<10>@param keys the reference to an array of the keys of the records to remove.
+E<10>@return the number of removed records, or -1 on failure.
+
+=item $db-E<gt>get_bulk(I<keys>)
+
+E<10>Retrieve records at once.
+E<10>@param keys the reference to an array of the keys of the records to retrieve.
+E<10>@return the reference to a hash of retrieved records, or undef on failure.
+
+=item $db-E<gt>clearZ<>()
+
+E<10>Remove all records.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>synchronizeZ<>(I<hard>, I<proc>)
+
+E<10>Synchronize updated contents with the file and the device.
+E<10>@param hard true for physical synchronization with the device, or false for logical synchronization with the file system.
+E<10>@param proc a postprocessor object which implements the FileProcessor interface.  It can be the reference to a function.
+E<10>@return true on success, or false on failure.
+E<10>@note The operation of the processor is performed atomically and other threads accessing the same record are blocked.  To avoid deadlock, any explicit database operation must not be performed in this method.
+
+=item $db-E<gt>occupyZ<>(I<writable>, I<proc>)
+
+E<10>Occupy database by locking and do something meanwhile.
+E<10>@param writable true to use writer lock, or false to use reader lock.
+E<10>@param proc a processor object which implements the FileProcessor interface.  It can be the reference to a function.
+E<10>@return true on success, or false on failure.
+E<10>@note The operation of the processor is performed atomically and other threads accessing the same record are blocked.  To avoid deadlock, any explicit database operation must not be performed in this method.
+
+=item $db-E<gt>copyZ<>(I<dest>)
+
+E<10>Create a copy of the database file.
+E<10>@param dest the path of the destination file.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>begin_transactionZ<>(I<hard>)
+
+E<10>Begin transaction.
+E<10>@param hard true for physical synchronization with the device, or false for logical synchronization with the file system.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>end_transactionZ<>(I<commit>)
+
+E<10>End transaction.
+E<10>@param commit true to commit the transaction, or false to abort the transaction.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>transactionZ<>(I<proc>, I<hard>)
+
+E<10>Perform entire transaction by a functor.
+E<10>@param proc the functor of operations during transaction.  If the function returns true, the transaction is committed.  If the function returns false, the transaction is aborted.
+E<10>@param hard true for physical synchronization with the device, or false for logical synchronization with the file system.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>dump_snapshotZ<>(I<dest>)
+
+E<10>Dump records into a snapshot file.
+E<10>@param dest the name of the destination file.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>load_snapshotZ<>(I<src>)
+
+E<10>Load records from a snapshot file.
+E<10>@param src the name of the source file.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>countZ<>()
+
+E<10>Get the number of records.
+E<10>@return the number of records, or -1 on failure.
+
+=item $db-E<gt>sizeZ<>()
+
+E<10>Get the size of the database file.
+E<10>@return the size of the database file in bytes, or -1 on failure.
+
+=item $db-E<gt>pathZ<>()
+
+E<10>Get the path of the database file.
+E<10>@return the path of the database file, or undef on failure.
+
+=item $db-E<gt>statusZ<>()
+
+E<10>Get the miscellaneous status information.
+E<10>@return the reference to a hash object of the status information, or undef on failure.
+
+=item $db-E<gt>match_prefixZ<>(I<prefix>, I<max>)
+
+E<10>Get keys matching a prefix string.
+E<10>@param prefix the prefix string.
+E<10>@param max the maximum number to retrieve.  If it is negative, no limit is specified.
+E<10>@return the reference to an array of matching keys, or undef on failure.
+
+=item $db-E<gt>match_regexZ<>(I<regex>, I<max>)
+
+E<10>Get keys matching a regular expression string.
+E<10>@param regex the regular expression string.
+E<10>@param max the maximum number to retrieve.  If it is negative, no limit is specified.
+E<10>@return the reference to an array of matching keys, or undef on failure.
+
+=item $db-E<gt>match_similarZ<>(I<origin>, I<range>, I<utf>, I<max>)
+
+E<10>Get keys similar to a string in terms of the levenshtein distance.
+E<10>@param origin the origin string.
+E<10>@param range the maximum distance of keys to adopt.
+E<10>@param utf flag to treat keys as UTF-8 strings.
+E<10>@param max the maximum number to retrieve.  If it is negative, no limit is specified.
+E<10>@return the reference to an array of matching keys, or undef on failure.
+
+=item $db-E<gt>mergeZ<>(I<srcary>, I<mode>)
+
+E<10>Merge records from other databases.
+E<10>@param srcary the reference to an array of the source detabase objects.
+E<10>@param mode the merge mode.  KyotoCabinet::DB::MSET to overwrite the existing value, KyotoCabinet::DB::MADD to keep the existing value, KyotoCabinet::DB::MAPPEND to append the new value.
+E<10>@return true on success, or false on failure.
+
+=item $db-E<gt>cursorZ<>()
+
+E<10>Create a cursor object.
+E<10>@return the return value is the created cursor object.  Each cursor should be disabled with the Cursor::disable method when it is no longer in use.
+
+=item $db-E<gt>cursor_processZ<>(I<proc>)
+
+E<10>Process a cursor by a functor.
+E<10>@param proc the functor of operations for the cursor.  The cursor is disabled implicitly after the block.
+E<10>@return always undef.
+
+=item $db-E<gt>stringZ<>()
+
+E<10>Get the string expression.
+E<10>@return the string expression.
+E<10>@note This method overrides the stringification operator.
+
+=item KyotoCabinet::DB-E<gt>process(I<proc>, I<path>, I<mode>)
+
+E<10>Process a database by a functor.
+E<10>@param proc the functor to process the database, whose object is passd as the parameter.
+E<10>@param path the same to the one of the open method.
+E<10>@param mode the same to the one of the open method.
+E<10>@return undef on success, or an error object on failure.
+
+=back
+
+=head2 Tying functions of KyotoCabinet::DB
+
+=over
+
+=item $db = tieZ<>(%db, "KyotoCabinet::DB", I<path>, I<mode>)
+
+E<10>Tie a hash variable to a database file.
+E<10>@param path the path of a database file.
+E<10>@param mode the connection mode.
+E<10>@return the inner database object, or undef on failure.
+E<10>@note The database file is opened implicitly with the given parameters.
+
+=item untieZ<>(%db)
+
+E<10>Untie a hash variable from the database file.
+E<10>@return always undef.
+E<10>@note The database file is closed implicitly.
+
+=item $db{I<key>}
+
+E<10>Retrieve the value of a record.
+E<10>@param key the key.
+E<10>@return the value of the corresponding record, or undef on failure.
+
+=item $db{I<key>} = I<value>
+
+E<10>Store a record.
+E<10>@param key the key.
+E<10>@param value the value.
+E<10>@return true on success, or false on failure.
+
+=item deleteZ<>($db{I<key>})
+
+E<10>Remove a record.
+E<10>@param key the key.
+E<10>@return true on success, or false on failure.
+
+=item %db = ()
+
+E<10>Remove all records.
+E<10>@return true on success, or false on failure.
+
+=item existsZ<>($db{I<key>})
+
+E<10>Check whether a record corrsponding a key exists.
+E<10>@return true if the key exists, or false if not.
+
+=item (the iterator)
+
+E<10>The inner methods `FIRSTKEY' and `NEXTKEY' are also implemented so that you can use the tying functions `each', `keys', and so on.
+
+=back
+
+=head1 LICENSE
+
+ Copyright (C) 2009-2010 FAL Labs
+ All rights reserved.
+
+Kyoto Cabinet is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
+
+Kyoto Cabinet is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
